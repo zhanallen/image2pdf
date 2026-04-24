@@ -1,11 +1,12 @@
 import os
 import tkinter as tk
 from tkinter import filedialog, colorchooser, messagebox
+from datetime import datetime
 from PIL import Image
 
 
 # ==========================================
-# 核心轉換模組 (與之前大致相同，微調以適應 UI)
+# 核心轉換模組
 # ==========================================
 def convert_images_to_pdf(image_paths, output_pdf_path, bg_color=(255, 255, 255)):
     if not image_paths:
@@ -38,7 +39,6 @@ def convert_images_to_pdf(image_paths, output_pdf_path, bg_color=(255, 255, 255)
         if first_image is None:
             return False, "找不到有效的圖片可以轉換。"
 
-        # 如果只有一張圖片，image_list 會是空的，這在 Pillow 是合法的
         first_image.save(
             output_pdf_path,
             "PDF",
@@ -59,14 +59,19 @@ class ImageToPdfApp:
     def __init__(self, root):
         self.root = root
         self.root.title("圖片轉 PDF 工具")
-        self.root.geometry("500x450")
+        # 稍微加高視窗以容納新的輸入框
+        self.root.geometry("520x500")
         self.root.resizable(False, False)
 
         # 變數初始化
         self.image_paths = []
-        self.output_dir = os.getcwd()  # 預設為程式執行的位置
-        self.bg_color = (255, 255, 255)  # 預設背景色為白色
-        self.merge_mode = tk.BooleanVar(value=True)  # 預設合併為單一檔案
+        self.output_dir = os.getcwd()
+        self.bg_color = (255, 255, 255)
+        self.merge_mode = tk.BooleanVar(value=True)
+
+        # 預設檔名使用當下時間 (格式：YYYYMMDD_HHMMSS)
+        default_filename = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.custom_filename = tk.StringVar(value=default_filename)
 
         self.create_widgets()
 
@@ -85,32 +90,43 @@ class ImageToPdfApp:
         frame_mid = tk.LabelFrame(self.root, text="輸出設定", pady=10, padx=10)
         frame_mid.pack(fill=tk.X, padx=20, pady=10)
 
-        # 1. 合併或分開
-        tk.Radiobutton(frame_mid, text="全部合併成單一 PDF", variable=self.merge_mode, value=True).grid(row=0, column=0,
-                                                                                                        sticky=tk.W)
-        tk.Radiobutton(frame_mid, text="每張圖片獨立轉成一個 PDF", variable=self.merge_mode, value=False).grid(row=0,
-                                                                                                               column=1,
-                                                                                                               sticky=tk.W)
+        # 1. 合併或分開 (加入 command 連動輸入框狀態)
+        tk.Radiobutton(frame_mid, text="全部合併成單一 PDF", variable=self.merge_mode, value=True,
+                       command=self.toggle_filename_entry).grid(row=0, column=0, sticky=tk.W)
+        tk.Radiobutton(frame_mid, text="每張獨立轉成一個 PDF", variable=self.merge_mode, value=False,
+                       command=self.toggle_filename_entry).grid(row=0, column=1, sticky=tk.W)
 
-        # 2. 輸出位置
+        # 2. 自訂檔名 (只在合併模式下啟用)
+        frame_filename = tk.Frame(frame_mid)
+        frame_filename.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=5)
+
+        self.lbl_filename = tk.Label(frame_filename, text="合併輸出檔名:")
+        self.lbl_filename.pack(side=tk.LEFT)
+
+        self.entry_filename = tk.Entry(frame_filename, textvariable=self.custom_filename, width=25)
+        self.entry_filename.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(frame_filename, text=".pdf").pack(side=tk.LEFT)
+
+        # 3. 輸出位置
         self.btn_output_dir = tk.Button(frame_mid, text="選擇輸出資料夾", command=self.select_output_dir)
-        self.btn_output_dir.grid(row=1, column=0, pady=15, sticky=tk.W)
+        self.btn_output_dir.grid(row=2, column=0, pady=10, sticky=tk.W)
 
         self.lbl_output_dir = tk.Label(frame_mid, text=f"路徑: {self.output_dir}", wraplength=300, justify=tk.LEFT,
                                        fg="gray")
-        self.lbl_output_dir.grid(row=1, column=1, sticky=tk.W, padx=10)
+        self.lbl_output_dir.grid(row=2, column=1, sticky=tk.W, padx=10)
 
-        # 3. 背景顏色選擇
+        # 4. 背景顏色選擇
         self.btn_color = tk.Button(frame_mid, text="選擇 PNG 透明背景替換色", command=self.choose_color)
-        self.btn_color.grid(row=2, column=0, pady=5, sticky=tk.W)
+        self.btn_color.grid(row=3, column=0, pady=5, sticky=tk.W)
 
         self.color_display = tk.Label(frame_mid, text="      ", bg="#FFFFFF", relief="solid", borderwidth=1)
-        self.color_display.grid(row=2, column=1, sticky=tk.W, padx=10)
+        self.color_display.grid(row=3, column=1, sticky=tk.W, padx=10)
         self.lbl_color_rgb = tk.Label(frame_mid, text="(255, 255, 255)", fg="gray")
-        self.lbl_color_rgb.grid(row=2, column=1, sticky=tk.W, padx=45)
+        self.lbl_color_rgb.grid(row=3, column=1, sticky=tk.W, padx=45)
 
         # --- 執行區 ---
-        frame_bottom = tk.Frame(self.root, pady=20)
+        frame_bottom = tk.Frame(self.root, pady=10)
         frame_bottom.pack(fill=tk.X, padx=20)
 
         self.btn_convert = tk.Button(frame_bottom, text="開始轉換", command=self.start_conversion, bg="#4CAF50",
@@ -118,6 +134,15 @@ class ImageToPdfApp:
         self.btn_convert.pack(fill=tk.X)
 
     # --- 互動功能綁定 ---
+    def toggle_filename_entry(self):
+        """根據單選按鈕的狀態，決定是否讓使用者輸入檔名"""
+        if self.merge_mode.get():
+            self.entry_filename.config(state=tk.NORMAL)
+            self.lbl_filename.config(fg="black")
+        else:
+            self.entry_filename.config(state=tk.DISABLED)
+            self.lbl_filename.config(fg="gray")
+
     def select_images(self):
         paths = filedialog.askopenfilenames(
             title="請選擇圖片",
@@ -134,13 +159,10 @@ class ImageToPdfApp:
             self.lbl_output_dir.config(text=f"路徑: {self.output_dir}")
 
     def choose_color(self):
-        # askcolor 會回傳 ((R, G, B), '#hex_color')
         color = colorchooser.askcolor(title="請選擇背景顏色", initialcolor=self.bg_color)
-        if color[0]:  # 確保使用者有選擇顏色而非按下取消
-            # 轉換為整數 tuple
+        if color[0]:
             self.bg_color = tuple(int(c) for c in color[0])
             hex_color = color[1]
-            # 更新介面顯示
             self.color_display.config(bg=hex_color)
             self.lbl_color_rgb.config(text=str(self.bg_color))
 
@@ -152,22 +174,31 @@ class ImageToPdfApp:
         is_merge = self.merge_mode.get()
         success_count = 0
 
-        # 禁用按鈕避免重複點擊
         self.btn_convert.config(state=tk.DISABLED, text="轉換中...")
         self.root.update()
 
         if is_merge:
-            # 模式 1：全部合併
-            output_file = os.path.join(self.output_dir, "merged_output.pdf")
+            # --- 模式 1：全部合併 (使用自訂檔名) ---
+            filename = self.custom_filename.get().strip()
+
+            # 防呆：如果使用者把輸入框清空，給它一個備用的時間檔名
+            if not filename:
+                filename = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # 防呆：避免使用者重複輸入 .pdf
+            if not filename.lower().endswith(".pdf"):
+                filename += ".pdf"
+
+            output_file = os.path.join(self.output_dir, filename)
+
             success, msg = convert_images_to_pdf(self.image_paths, output_file, self.bg_color)
             if success:
                 messagebox.showinfo("成功", f"合併轉換完成！\n\n{msg}")
             else:
                 messagebox.showerror("錯誤", msg)
         else:
-            # 模式 2：獨立檔案
+            # --- 模式 2：獨立檔案 ---
             for path in self.image_paths:
-                # 取得原本的檔名（不含副檔名）
                 base_name = os.path.splitext(os.path.basename(path))[0]
                 output_file = os.path.join(self.output_dir, f"{base_name}.pdf")
 
@@ -180,7 +211,6 @@ class ImageToPdfApp:
             else:
                 messagebox.showwarning("部分成功", f"完成了 {success_count}/{len(self.image_paths)} 張圖片的轉換。")
 
-        # 恢復按鈕狀態
         self.btn_convert.config(state=tk.NORMAL, text="開始轉換")
 
 
