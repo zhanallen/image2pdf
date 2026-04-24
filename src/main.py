@@ -79,10 +79,10 @@ def main():
     print("=== 圖片轉 PDF 小工具 ===")
 
     input_images = [
-        "images/sample1.jpg",
-        "images/sample2.jpg",
-        "images/sample16.png",
-        "images/test.png"
+        "../test/images/sample1.jpg",
+        "../test/images/sample2.jpg",
+        "../test/images/sample16.png",
+        "../test/images/test.png"
     ]
     output_file = "output.pdf"
 
