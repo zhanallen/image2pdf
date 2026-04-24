@@ -86,16 +86,25 @@ class ImageToPdfApp:
         inner_btns_frame = ctk.CTkFrame(frame_list_btns, fg_color="transparent")
         inner_btns_frame.pack(expand=True)
 
-        # 統一按鈕的字體與尺寸設定 (40x40 完美正方形)
-        icon_font = ctk.CTkFont(size=18)
-        btn_size = 40
+        # 1. 改用標準純文字符號，避免作業系統的 Emoji 渲染差異
+        # 2. 明確指定字體，確保符號置中
+        icon_font = ctk.CTkFont(family="Arial", size=16, weight="bold")
+        btn_size = 36
 
-        ctk.CTkButton(inner_btns_frame, text="⬆️", width=btn_size, height=btn_size, anchor="center", font=icon_font,
-                      command=self.move_up).pack(pady=(0, 8))
-        ctk.CTkButton(inner_btns_frame, text="⬇️", width=btn_size, height=btn_size, anchor="center", font=icon_font,
-                      command=self.move_down).pack(pady=(0, 8))
-        ctk.CTkButton(inner_btns_frame, text="🗑️", width=btn_size, height=btn_size, anchor="center", font=icon_font,
-                      fg_color="#FF9800", hover_color="#F57C00", command=self.remove_selected).pack()
+        # 透過統一的字典設定，確保按鈕絕對不會被內容撐開
+        btn_kwargs = {
+            "width": btn_size,
+            "height": btn_size,
+            "font": icon_font,
+            "corner_radius": 6,
+            "anchor": "center"
+        }
+
+        # 使用標準幾何符號 ▲ ▼ ✖
+        ctk.CTkButton(inner_btns_frame, text="▲", command=self.move_up, **btn_kwargs).pack(pady=(0, 8))
+        ctk.CTkButton(inner_btns_frame, text="▼", command=self.move_down, **btn_kwargs).pack(pady=(0, 8))
+        ctk.CTkButton(inner_btns_frame, text="✖", fg_color="#FF9800", hover_color="#F57C00",
+                      command=self.remove_selected, **btn_kwargs).pack()
         # ==========================================
 
         # 底部操作按鈕區
