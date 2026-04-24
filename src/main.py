@@ -84,7 +84,7 @@ def main():
         "../test/images/sample16.png",
         "../test/images/test.png"
     ]
-    output_file = "output.pdf"
+    output_file = "../test/output.pdf"
 
     print(f"準備處理 {len(input_images)} 張圖片...")
 
