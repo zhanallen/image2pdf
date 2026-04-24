@@ -31,12 +31,12 @@ class ImageToPdfApp:
     def __init__(self, root):
         self.root = root
         self.root.title("圖片轉 PDF 專業版")
-        self.root.geometry("620x800")
+        self.root.geometry("620x760")
         self.root.resizable(False, False)
 
         # 變數初始化
         self.image_paths = []
-        self.selected_index = None  # 記錄目前在自訂列表中選取的項目
+        self.selected_index = None
 
         self.output_dir = os.getcwd()
         self.bg_color = (255, 255, 255)
@@ -48,7 +48,7 @@ class ImageToPdfApp:
 
         self.create_widgets()
         self.setup_dnd()
-        self.update_listbox()  # 初始化畫面狀態
+        self.update_listbox()
 
     def create_widgets(self):
         title_lbl = ctk.CTkLabel(self.root, text="圖片轉 PDF 工具", font=ctk.CTkFont(size=24, weight="bold"))
@@ -62,14 +62,12 @@ class ImageToPdfApp:
                                                                                                          padx=20,
                                                                                                          pady=(15, 5))
 
-        # 【全新升級：整合拖放區與現代化清單】
         frame_list_area = ctk.CTkFrame(frame_top, fg_color="transparent")
         frame_list_area.pack(fill="x", padx=20, pady=5)
 
-        # 使用 ScrollableFrame 作為自訂清單的容器
         self.list_frame = ctk.CTkScrollableFrame(
             frame_list_area,
-            height=160,
+            height=120,
             corner_radius=8,
             fg_color=("gray85", "gray20"),
             border_width=2,
@@ -77,18 +75,32 @@ class ImageToPdfApp:
         )
         self.list_frame.pack(side="left", fill="both", expand=True)
 
-        # 右側控制按鈕
+        # ==========================================
+        # 【修改區塊】：右側控制按鈕完美置中與統一尺寸
+        # ==========================================
+        # 建立外層框架並允許它填滿垂直空間 (fill="y")
         frame_list_btns = ctk.CTkFrame(frame_list_area, fg_color="transparent")
-        frame_list_btns.pack(side="left", padx=(10, 0))
+        frame_list_btns.pack(side="left", padx=(10, 0), fill="y")
 
-        ctk.CTkButton(frame_list_btns, text="🔼 上移", width=80, command=self.move_up).pack(pady=(0, 5))
-        ctk.CTkButton(frame_list_btns, text="🔽 下移", width=80, command=self.move_down).pack(pady=(0, 5))
-        ctk.CTkButton(frame_list_btns, text="❌ 移除選定", width=80, fg_color="#FF9800", hover_color="#F57C00",
-                      command=self.remove_selected).pack(pady=(0, 5))
+        # 建立內層框架並設定 expand=True，這樣按鈕群組就會被自動推到最中間
+        inner_btns_frame = ctk.CTkFrame(frame_list_btns, fg_color="transparent")
+        inner_btns_frame.pack(expand=True)
+
+        # 統一按鈕的字體與尺寸設定 (40x40 完美正方形)
+        icon_font = ctk.CTkFont(size=18)
+        btn_size = 40
+
+        ctk.CTkButton(inner_btns_frame, text="⬆️", width=btn_size, height=btn_size, anchor="center", font=icon_font,
+                      command=self.move_up).pack(pady=(0, 8))
+        ctk.CTkButton(inner_btns_frame, text="⬇️", width=btn_size, height=btn_size, anchor="center", font=icon_font,
+                      command=self.move_down).pack(pady=(0, 8))
+        ctk.CTkButton(inner_btns_frame, text="🗑️", width=btn_size, height=btn_size, anchor="center", font=icon_font,
+                      fg_color="#FF9800", hover_color="#F57C00", command=self.remove_selected).pack()
+        # ==========================================
 
         # 底部操作按鈕區
         frame_btns = ctk.CTkFrame(frame_top, fg_color="transparent")
-        frame_btns.pack(anchor="w", padx=20, pady=(10, 15))
+        frame_btns.pack(anchor="w", padx=20, pady=(5, 15))
 
         self.btn_add_imgs = ctk.CTkButton(frame_btns, text="➕ 點擊選擇圖片", command=self.add_images, width=120)
         self.btn_add_imgs.pack(side="left", padx=(0, 15))
@@ -153,13 +165,9 @@ class ImageToPdfApp:
     # ==========================================
 
     def update_listbox(self):
-        """根據 image_paths 重新渲染自訂清單畫面"""
-
-        # 1. 清空捲動區塊內的所有舊元件
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-        # 2. 如果沒有圖片，顯示拖放提示
         if not self.image_paths:
             lbl_drop = ctk.CTkLabel(
                 self.list_frame,
@@ -167,15 +175,13 @@ class ImageToPdfApp:
                 font=ctk.CTkFont(size=14),
                 text_color=("gray40", "gray60")
             )
-            lbl_drop.pack(expand=True, fill="both", pady=40)
-            self.selected_index = None  # 清空選取狀態
+            lbl_drop.pack(expand=True, fill="both", pady=25)
+            self.selected_index = None
             return
 
-        # 3. 如果有圖片，逐一渲染成按鈕外觀的「列表項目」
         for i, path in enumerate(self.image_paths):
             is_selected = (i == self.selected_index)
 
-            # 根據是否選中來決定顏色
             bg_color = "#1F6AA5" if is_selected else "transparent"
             hover_color = "#144870" if is_selected else ("gray75", "gray25")
             text_col = "white" if is_selected else ("black", "white")
@@ -183,22 +189,22 @@ class ImageToPdfApp:
             btn_item = ctk.CTkButton(
                 self.list_frame,
                 text=f"{i + 1}. {os.path.basename(path)}",
-                anchor="w",  # 文字靠左對齊
+                anchor="w",
                 fg_color=bg_color,
                 hover_color=hover_color,
                 text_color=text_col,
                 corner_radius=6,
-                height=32,
-                command=lambda idx=i: self.select_item(idx)  # 綁定點擊事件
+                height=30,
+                command=lambda idx=i: self.select_item(idx)
             )
             btn_item.pack(fill="x", padx=5, pady=2)
 
     def select_item(self, index):
-        """處理清單項目的點擊選取"""
         self.selected_index = index
-        self.update_listbox()  # 重新渲染以更新選中顏色
+        self.update_listbox()
 
-    # ==========================================
+        # ==========================================
+
     # 互動功能與列表管理邏輯
     # ==========================================
 
@@ -206,27 +212,26 @@ class ImageToPdfApp:
         if self.selected_index is not None and self.selected_index > 0:
             idx = self.selected_index
             self.image_paths[idx - 1], self.image_paths[idx] = self.image_paths[idx], self.image_paths[idx - 1]
-            self.selected_index -= 1  # 讓選取狀態跟著往上走
+            self.selected_index -= 1
             self.update_listbox()
 
     def move_down(self):
         if self.selected_index is not None and self.selected_index < len(self.image_paths) - 1:
             idx = self.selected_index
             self.image_paths[idx + 1], self.image_paths[idx] = self.image_paths[idx], self.image_paths[idx + 1]
-            self.selected_index += 1  # 讓選取狀態跟著往下走
+            self.selected_index += 1
             self.update_listbox()
 
     def remove_selected(self):
         if self.selected_index is not None:
             del self.image_paths[self.selected_index]
-            self.selected_index = None  # 刪除後取消選取狀態
+            self.selected_index = None
             self.update_listbox()
 
             self.lbl_img_count.configure(text=f"目前已加入: {len(self.image_paths)} 張圖片")
             self.refresh_auto_filename()
 
     def setup_dnd(self):
-        # 依然將整個視窗註冊為拖放目標，方便使用者隨意拖放
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.handle_drop)
 
@@ -271,7 +276,6 @@ class ImageToPdfApp:
         success = self.process_added_images(dropped_files)
 
         if success:
-            # 成功加入後，讓自訂清單的邊框閃爍綠色作為回饋
             self.list_frame.configure(border_color="#4CAF50", border_width=2)
             self.root.after(500, lambda: self.list_frame.configure(border_color=("gray60", "gray40")))
 
