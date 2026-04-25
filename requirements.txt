@@ -1,1 +1,5 @@
+customtkinter~=5.2.2
+CTkColorPicker~=0.9.0
+pywinstyles~=1.8
+tkinterdnd2~=0.4.3
 pillow~=12.2.0
