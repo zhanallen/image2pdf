@@ -73,9 +73,16 @@ class ImageToPdfApp:
             try:
                 build_number = int(platform.version().split('.')[2])
                 if build_number >= 22000:
+                    # Windows 11 完美支援 Mica
                     pywinstyles.apply_style(self.root, "mica")
                 else:
-                    pywinstyles.apply_style(self.root, "acrylic")
+                    # Windows 10 的 Acrylic 在淺色模式容易導致背景變純黑
+                    # 【修正】：若是淺色模式，給予原生 M3 淺色背景；若是深色模式再套用特效
+                    if ctk.get_appearance_mode() == "Light":
+                        self.root.configure(fg_color="#F9F9FA")
+                    else:
+                        pywinstyles.apply_style(self.root, "acrylic")
+
                 pywinstyles.change_header_color(self.root, color="transparent")
             except Exception as e:
                 print(f"特效載入失敗: {e}")
@@ -84,7 +91,9 @@ class ImageToPdfApp:
         # 略... (維持你原本極優秀的 UI 設計，完全不用動)
         title_lbl = ctk.CTkLabel(
             self.root, text="圖片轉換工具",
-            font=ctk.CTkFont(family="Segoe UI Variable Display", size=26, weight="bold")
+            font=ctk.CTkFont(family="Segoe UI Variable Display", size=26, weight="bold"),
+            fg_color="transparent",  # 強制背景透明
+            text_color=("black", "white")  # 淺色模式黑字，深色模式白字
         )
         title_lbl.pack(pady=(20, 10))
 
