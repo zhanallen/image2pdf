@@ -45,7 +45,7 @@ class ImageToPdfApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Image to PDF")
-        self.root.geometry("620x760")
+        self.root.geometry("620x730")
         self.root.resizable(False, False)
 
         self.apply_glassmorphism()
@@ -134,7 +134,7 @@ class ImageToPdfApp:
         ctk.CTkButton(inner_btns_frame, text="✖", command=self.remove_selected, **btn_kwargs).pack()
 
         frame_btns = ctk.CTkFrame(frame_top, fg_color="transparent")
-        frame_btns.pack(anchor="w", padx=20, pady=(5, 15))
+        frame_btns.pack(fill="x", padx=20, pady=(5, 15))
 
         self.btn_add_imgs = ctk.CTkButton(
             frame_btns, text="➕ 選擇圖片", command=self.add_images,
@@ -150,9 +150,12 @@ class ImageToPdfApp:
         )
         self.btn_clear_imgs.pack(side="left")
 
-        self.lbl_img_count = ctk.CTkLabel(frame_top, text="目前加入: 0 張", text_color=("gray40", "gray50"),
-                                          font=ctk.CTkFont(size=12))
-        self.lbl_img_count.pack(anchor="e", padx=20, pady=(0, 10))
+        # 【核心修正】：將文字標籤的父容器改成 frame_btns，並設定靠右對齊
+        self.lbl_img_count = ctk.CTkLabel(
+            frame_btns, text="目前加入: 0 張",
+            text_color=("gray40", "gray50"), font=ctk.CTkFont(size=12)
+        )
+        self.lbl_img_count.pack(side="right")
 
         frame_mid = ctk.CTkFrame(self.root, corner_radius=M3_CARD_RADIUS, fg_color=M3_CARD_COLOR)
         frame_mid.pack(fill="x", padx=25, pady=8)
@@ -179,8 +182,17 @@ class ImageToPdfApp:
         frame_dir = ctk.CTkFrame(frame_mid, fg_color="transparent")
         frame_dir.pack(fill="x", padx=20, pady=5)
         self.btn_output_dir = ctk.CTkButton(
-            frame_dir, text="📂 變更位置", command=self.select_output_dir,
-            corner_radius=M3_BTN_RADIUS, fg_color="transparent", border_width=1, text_color=("gray20", "gray80")
+            frame_dir,
+            text="📂 變更位置",
+            command=self.select_output_dir,
+            corner_radius=M3_BTN_RADIUS,
+            # 【優化 1】：不使用 transparent，改用背後卡片的底色，能完美解決 1px 邊線破圖
+            fg_color=M3_CARD_COLOR,
+            # 【優化 2】：明確給予邊框顏色，讓淺色與深色模式都有乾淨的輪廓
+            border_color=("gray75", "gray30"),
+            border_width=2,
+            text_color=("gray20", "gray80"),
+            hover_color=("gray85", "gray25")  # 加上 hover 顏色讓點擊回饋更自然
         )
         self.btn_output_dir.pack(side="left", padx=(0, 10))
         self.lbl_output_dir = ctk.CTkLabel(frame_dir, text=f"路徑: {self.output_dir}", wraplength=300, justify="left",
@@ -189,7 +201,7 @@ class ImageToPdfApp:
 
         frame_color = ctk.CTkFrame(frame_mid, fg_color="transparent")
         frame_color.pack(fill="x", padx=20, pady=(10, 20))
-        ctk.CTkLabel(frame_color, text="透明背景轉換色:").pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(frame_color, text="PNG透明色轉換:").pack(side="left", padx=(0, 10))
         self.color_display = ctk.CTkLabel(frame_color, text="", width=36, height=28, fg_color=self.hex_color,
                                           corner_radius=8, cursor="hand2")
         self.color_display.pack(side="left", padx=(0, 10))
@@ -365,18 +377,27 @@ class ImageToPdfApp:
         return new_filepath
 
     def prompt_file_exists(self, filename):
-        """建立一個客製化的彈出視窗，提供三個選項"""
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("發現重複檔案")
         dialog.geometry("400x180")
         dialog.resizable(False, False)
-        dialog.attributes("-topmost", True)  # 保持在最上層
 
-        # 讓視窗變成模態 (Modal)，強制使用者先回應這個視窗
+        # 【優化】：視窗置中計算
+        self.root.update_idletasks()  # 確保讀取到最新的視窗數值
+        parent_x = self.root.winfo_x()
+        parent_y = self.root.winfo_y()
+        parent_width = self.root.winfo_width()
+        parent_height = self.root.winfo_height()
+
+        # 計算對話框應該出現的座標 (置於父視窗中心)
+        x = parent_x + (parent_width // 2) - (400 // 2)
+        y = parent_y + (parent_height // 2) - (180 // 2)
+        dialog.geometry(f"400x180+{x}+{y}")
+
+        dialog.attributes("-topmost", True)
         dialog.transient(self.root)
         dialog.grab_set()
 
-        # 預設回傳值為 "skip"（如果使用者直接按 X 關閉視窗，就視同跳過）
         result = tk.StringVar(value="skip")
 
         ctk.CTkLabel(
@@ -392,14 +413,12 @@ class ImageToPdfApp:
             result.set(val)
             dialog.destroy()
 
-        # 三個按鈕：覆蓋、保留、跳過
         ctk.CTkButton(btn_frame, text="覆蓋", width=90, fg_color="#D32F2F", hover_color="#B71C1C",
                       command=lambda: set_res("overwrite")).pack(side="left", padx=10)
         ctk.CTkButton(btn_frame, text="保留兩者", width=90, command=lambda: set_res("keep")).pack(side="left", padx=10)
         ctk.CTkButton(btn_frame, text="跳過", width=90, fg_color="gray", hover_color="darkgray",
                       command=lambda: set_res("skip")).pack(side="left", padx=10)
 
-        # 暫停主程式，等待對話框關閉
         self.root.wait_window(dialog)
         return result.get()
 
@@ -414,66 +433,67 @@ class ImageToPdfApp:
         bg_col = self.bg_color
         paths = list(self.image_paths)
 
-        final_output_file = ""
+        # 準備要轉換的任務清單 [(圖片路徑清單, 輸出PDF路徑), ...]
+        conversion_tasks = []
 
-        # 【新增】：在主執行緒先檢查檔名與檔案是否存在
+        # --- 處理合併模式 ---
         if is_merge:
-            filename = custom_name
-            if not filename:
-                filename = datetime.now().strftime("%Y%m%d_%H%M%S")
-            if not filename.lower().endswith(".pdf"):
-                filename += ".pdf"
+            filename = custom_name if custom_name else datetime.now().strftime("%Y%m%d_%H%M%S")
+            if not filename.lower().endswith(".pdf"): filename += ".pdf"
 
-            final_output_file = os.path.join(out_dir, filename)
+            target_path = os.path.join(out_dir, filename)
 
-            # 檔案存在的處理邏輯
-            if os.path.exists(final_output_file):
+            if os.path.exists(target_path):
                 choice = self.prompt_file_exists(filename)
-
                 if choice == "skip":
-                    # 使用者選擇跳過/取消，直接結束函式
                     return
                 elif choice == "keep":
-                    # 使用者選擇保留，重新產生不重複的檔名
-                    final_output_file = self.get_unique_filepath(final_output_file)
-                # 若 choice == "overwrite"，則保持原路徑，直接覆蓋
+                    target_path = self.get_unique_filepath(target_path)
 
-        # 確定要轉檔了，才鎖定按鈕
+            conversion_tasks.append((paths, target_path))
+
+        # --- 處理獨立檔案模式 ---
+        else:
+            for p in paths:
+                base_name = os.path.splitext(os.path.basename(p))[0]
+                filename = f"{base_name}.pdf"
+                target_path = os.path.join(out_dir, filename)
+
+                if os.path.exists(target_path):
+                    choice = self.prompt_file_exists(filename)
+                    if choice == "skip":
+                        continue  # 跳過這張圖，繼續下一張
+                    elif choice == "keep":
+                        target_path = self.get_unique_filepath(target_path)
+
+                conversion_tasks.append(([p], target_path))
+
+        if not conversion_tasks:
+            return
+
+        # UI 狀態鎖定
         self.btn_convert.configure(state="disabled", text="轉換中...")
 
-        # 定義背景執行的任務 (遠離主執行緒)
-        def conversion_task():
+        def run_tasks():
             success_count = 0
-            final_msg = ""
-            all_success = False
+            all_ok = True
 
-            if is_merge:
-                # 單一檔案輸出
-                success, msg = convert_images_to_pdf(paths, final_output_file, bg_col)
-                all_success = success
-                final_msg = msg
-            else:
-                # 獨立檔案輸出 (保持原邏輯)
-                for path in paths:
-                    base_name = os.path.splitext(os.path.basename(path))[0]
-                    output_file = os.path.join(out_dir, f"{base_name}.pdf")
-
-                    success, msg = convert_images_to_pdf([path], output_file, bg_col)
-                    if success:
-                        success_count += 1
-
-                if success_count == len(paths):
-                    all_success = True
-                    final_msg = f"將 {success_count} 張圖片轉換為 PDF！\n儲存於：{out_dir}"
+            for task_paths, target_file in conversion_tasks:
+                success, _ = convert_images_to_pdf(task_paths, target_file, bg_col)
+                if success:
+                    success_count += 1
                 else:
-                    all_success = False
-                    final_msg = f"完成 {success_count}/{len(paths)} 張圖片轉換。"
+                    all_ok = False
 
-            # 轉換完成後，排程回主執行緒更新 UI
-            self.root.after(0, lambda: self.on_conversion_done(is_merge, all_success, final_msg))
+            # 準備完成訊息
+            if is_merge:
+                msg = f"檔案已成功儲存於：\n{conversion_tasks[0][1]}" if all_ok else "轉換過程發生錯誤。"
+            else:
+                msg = f"完成 {success_count}/{len(conversion_tasks)} 張圖片轉換。"
 
-        # 啟動多執行緒
-        threading.Thread(target=conversion_task, daemon=True).start()
+            self.root.after(0, lambda: self.on_conversion_done(is_merge, all_ok, msg))
+
+        threading.Thread(target=run_tasks, daemon=True).start()
 
     def on_conversion_done(self, is_merge, success, msg):
         if is_merge:
