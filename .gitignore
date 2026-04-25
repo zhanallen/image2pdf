@@ -1,4 +1,8 @@
-/.venv
+.venv/
 /.idea
 /test
 *.pdf
+/build/
+/dist/
+*.spec
+__pycache__/
