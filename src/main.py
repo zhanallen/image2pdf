@@ -354,12 +354,59 @@ class ImageToPdfApp:
             self.lbl_color_rgb.configure(text=str(self.bg_color))
             self.root.update_idletasks()
 
+    def get_unique_filepath(self, filepath):
+        """如果選擇「保留兩者」，自動在檔名後加上 (1), (2)..."""
+        base, ext = os.path.splitext(filepath)
+        counter = 1
+        new_filepath = f"{base}({counter}){ext}"
+        while os.path.exists(new_filepath):
+            counter += 1
+            new_filepath = f"{base}({counter}){ext}"
+        return new_filepath
+
+    def prompt_file_exists(self, filename):
+        """建立一個客製化的彈出視窗，提供三個選項"""
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title("發現重複檔案")
+        dialog.geometry("400x180")
+        dialog.resizable(False, False)
+        dialog.attributes("-topmost", True)  # 保持在最上層
+
+        # 讓視窗變成模態 (Modal)，強制使用者先回應這個視窗
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # 預設回傳值為 "skip"（如果使用者直接按 X 關閉視窗，就視同跳過）
+        result = tk.StringVar(value="skip")
+
+        ctk.CTkLabel(
+            dialog,
+            text=f"輸出目錄中已存在檔案：\n「{filename}」\n\n您想要如何處理？",
+            justify="center"
+        ).pack(pady=20)
+
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=10)
+
+        def set_res(val):
+            result.set(val)
+            dialog.destroy()
+
+        # 三個按鈕：覆蓋、保留、跳過
+        ctk.CTkButton(btn_frame, text="覆蓋", width=90, fg_color="#D32F2F", hover_color="#B71C1C",
+                      command=lambda: set_res("overwrite")).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="保留兩者", width=90, command=lambda: set_res("keep")).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="跳過", width=90, fg_color="gray", hover_color="darkgray",
+                      command=lambda: set_res("skip")).pack(side="left", padx=10)
+
+        # 暫停主程式，等待對話框關閉
+        self.root.wait_window(dialog)
+        return result.get()
+
     def start_conversion(self):
         if not self.image_paths:
             messagebox.showwarning("警告", "請先新增圖片！")
             return
-
-        self.btn_convert.configure(state="disabled", text="轉換中...")
 
         is_merge = self.merge_mode.get()
         custom_name = self.custom_filename.get().strip()
@@ -367,23 +414,46 @@ class ImageToPdfApp:
         bg_col = self.bg_color
         paths = list(self.image_paths)
 
+        final_output_file = ""
+
+        # 【新增】：在主執行緒先檢查檔名與檔案是否存在
+        if is_merge:
+            filename = custom_name
+            if not filename:
+                filename = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if not filename.lower().endswith(".pdf"):
+                filename += ".pdf"
+
+            final_output_file = os.path.join(out_dir, filename)
+
+            # 檔案存在的處理邏輯
+            if os.path.exists(final_output_file):
+                choice = self.prompt_file_exists(filename)
+
+                if choice == "skip":
+                    # 使用者選擇跳過/取消，直接結束函式
+                    return
+                elif choice == "keep":
+                    # 使用者選擇保留，重新產生不重複的檔名
+                    final_output_file = self.get_unique_filepath(final_output_file)
+                # 若 choice == "overwrite"，則保持原路徑，直接覆蓋
+
+        # 確定要轉檔了，才鎖定按鈕
+        self.btn_convert.configure(state="disabled", text="轉換中...")
+
+        # 定義背景執行的任務 (遠離主執行緒)
         def conversion_task():
             success_count = 0
             final_msg = ""
             all_success = False
 
             if is_merge:
-                filename = custom_name
-                if not filename:
-                    filename = datetime.now().strftime("%Y%m%d_%H%M%S")
-                if not filename.lower().endswith(".pdf"):
-                    filename += ".pdf"
-
-                output_file = os.path.join(out_dir, filename)
-                success, msg = convert_images_to_pdf(paths, output_file, bg_col)
+                # 單一檔案輸出
+                success, msg = convert_images_to_pdf(paths, final_output_file, bg_col)
                 all_success = success
                 final_msg = msg
             else:
+                # 獨立檔案輸出 (保持原邏輯)
                 for path in paths:
                     base_name = os.path.splitext(os.path.basename(path))[0]
                     output_file = os.path.join(out_dir, f"{base_name}.pdf")
@@ -399,8 +469,10 @@ class ImageToPdfApp:
                     all_success = False
                     final_msg = f"完成 {success_count}/{len(paths)} 張圖片轉換。"
 
+            # 轉換完成後，排程回主執行緒更新 UI
             self.root.after(0, lambda: self.on_conversion_done(is_merge, all_success, final_msg))
 
+        # 啟動多執行緒
         threading.Thread(target=conversion_task, daemon=True).start()
 
     def on_conversion_done(self, is_merge, success, msg):
