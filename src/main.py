@@ -47,7 +47,7 @@ class EditableAskColor(ctk.CTkToplevel):
     def __init__(self, title="選擇透明背景替換色", initial_color="#FFFFFF", **kwargs):
         super().__init__(**kwargs)
         self.title(title)
-        self.geometry("320x400")  # 稍微再拉高一點點，讓排版更舒適
+        self.geometry("320x380")  # 稍微再拉高一點點，讓排版更舒適
         self.resizable(False, False)
         self.attributes("-topmost", True)
 
