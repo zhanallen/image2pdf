@@ -1,6 +1,6 @@
 # main.py
 import os
-import sys  # 【新增】用來接收拖放進執行檔的檔案路徑
+import sys
 import platform
 import tkinter as tk
 from tkinter import filedialog, messagebox
