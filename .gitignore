@@ -2,7 +2,7 @@
 .idea/
 /test
 *.pdf
-/build
-/dist
+./build/
+*/dist/
 *.spec
 __pycache__/
