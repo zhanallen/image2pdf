@@ -41,6 +41,115 @@ class CTk_DnD(ctk.CTk, TkinterDnD.DnDWrapper):
         self.TkdndVersion = TkinterDnD._require(self)
 
 
+class EditableAskColor(ctk.CTkToplevel):
+    """客製化的調色盤彈窗，新增「獨立顏色預覽區塊」與手動輸入"""
+
+    def __init__(self, title="選擇透明背景替換色", initial_color="#FFFFFF", **kwargs):
+        super().__init__(**kwargs)
+        self.title(title)
+        self.geometry("320x400")  # 稍微再拉高一點點，讓排版更舒適
+        self.resizable(False, False)
+        self.attributes("-topmost", True)
+
+        self.color = initial_color
+        self.last_color = initial_color
+
+        # 1. 裝載調色盤的容器
+        self.picker_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.picker_frame.pack(pady=(10, 5))
+
+        self._build_picker(initial_color)
+
+        # 2. 建立底部輸入區容器 (水平排列預覽框與輸入框)
+        self.input_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.input_frame.pack(pady=10)
+
+        # 【新增】：獨立的顏色預覽大方塊，解決拉桿預覽太小/被擋住的問題
+        self.color_preview = ctk.CTkFrame(
+            self.input_frame,
+            width=40, height=40,
+            corner_radius=8,
+            border_width=1, border_color=("gray70", "gray30"),
+            fg_color=initial_color
+        )
+        self.color_preview.pack(side="left", padx=(0, 10))
+
+        # 輸入框
+        self.hex_entry = ctk.CTkEntry(
+            self.input_frame,
+            width=120, height=40, corner_radius=8, justify="center",
+            font=ctk.CTkFont(weight="bold", size=14)
+        )
+        self.hex_entry.pack(side="left")
+        self.hex_entry.insert(0, initial_color)
+
+        self.hex_entry.bind("<Return>", self._on_hex_enter)
+        self.hex_entry.bind("<FocusOut>", self._on_hex_enter)
+
+        self._poll_color()
+
+        # 確認按鈕
+        self.button = ctk.CTkButton(self, text="確定", height=36, command=self._ok_event)
+        self.button.pack(pady=(5, 20))
+
+        self.grab_set()
+        self.wait_window()
+
+    def _build_picker(self, color):
+        """建構或重建調色盤元件"""
+        for widget in self.picker_frame.winfo_children():
+            widget.destroy()
+
+        self.picker = CTkColorPicker.CTkColorPicker(self.picker_frame, initial_color=color)
+        self.picker.pack()
+
+        for child in self.picker.winfo_children():
+            if isinstance(child, ctk.CTkLabel) and child.cget("text").startswith("#"):
+                child.pack_forget()
+                break
+
+    def _on_hex_enter(self, event=None):
+        """處理使用者手動輸入色碼"""
+        hex_val = self.hex_entry.get().strip().upper()
+        if len(hex_val) > 0 and not hex_val.startswith("#"):
+            hex_val = "#" + hex_val
+
+        if len(hex_val) == 7:
+            try:
+                int(hex_val[1:], 16)
+                if hex_val != self.last_color:
+                    self._build_picker(hex_val)
+                    self.last_color = hex_val
+                    # 【同步】：手動輸入成功時，更新大預覽框
+                    self.color_preview.configure(fg_color=hex_val)
+            except ValueError:
+                pass
+
+        self.hex_entry.delete(0, 'end')
+        self.hex_entry.insert(0, self.picker.get())
+
+    def _poll_color(self):
+        """定期檢查調色盤顏色是否被滑鼠拖拉改變"""
+        if not self.winfo_exists(): return
+        current_color = self.picker.get()
+        if current_color != self.last_color:
+            # 【同步】：滑鼠拖曳調色盤時，即時更新大預覽框
+            self.color_preview.configure(fg_color=current_color)
+
+            if self.focus_get() != self.hex_entry:
+                self.hex_entry.delete(0, 'end')
+                self.hex_entry.insert(0, current_color)
+            self.last_color = current_color
+        self.after(50, self._poll_color)
+
+    def _ok_event(self):
+        self._on_hex_enter()
+        self.color = self.picker.get()
+        self.destroy()
+
+    def get(self):
+        return self.color
+
 class ImageToPdfApp:
     def __init__(self, root):
         self.root = root
@@ -201,7 +310,7 @@ class ImageToPdfApp:
 
         frame_color = ctk.CTkFrame(frame_mid, fg_color="transparent")
         frame_color.pack(fill="x", padx=20, pady=(10, 20))
-        ctk.CTkLabel(frame_color, text="PNG透明色轉換:").pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(frame_color, text="PNG 透明色轉換 :").pack(side="left", padx=(0, 10))
         self.color_display = ctk.CTkLabel(frame_color, text="", width=36, height=28, fg_color=self.hex_color,
                                           corner_radius=8, cursor="hand2")
         self.color_display.pack(side="left", padx=(0, 10))
@@ -356,8 +465,10 @@ class ImageToPdfApp:
             self.lbl_output_dir.configure(text=f"路徑: {self.output_dir}")
 
     def choose_color(self, event=None):
-        pick_color = CTkColorPicker.AskColor(title="選擇透明背景替換色", initial_color=self.hex_color)
+        # 【修改這裡】：使用我們自製支援輸入的 EditableAskColor
+        pick_color = EditableAskColor(title="選擇透明背景替換色", initial_color=self.hex_color)
         selected_hex = pick_color.get()
+
         if selected_hex:
             self.hex_color = selected_hex
             hex_str = self.hex_color.lstrip('#')
