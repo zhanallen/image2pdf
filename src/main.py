@@ -1,12 +1,13 @@
 # main.py
 import os
+import sys  # 【新增】用來接收拖放進執行檔的檔案路徑
 import platform
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from datetime import datetime
-import threading  # 【新增】引入多執行緒模組
+import threading
 import customtkinter as ctk
-from CTkColorPicker import AskColor
+import CTkColorPicker
 from tkinterdnd2 import TkinterDnD, DND_FILES
 
 try:
@@ -18,6 +19,7 @@ except ImportError:
 
 from pdf_converter import convert_images_to_pdf
 
+ctk_cp_path = os.path.dirname(CTkColorPicker.__file__)
 # ==========================================
 # Material 3 風格與全域設定
 # ==========================================
@@ -42,7 +44,7 @@ class CTk_DnD(ctk.CTk, TkinterDnD.DnDWrapper):
 class ImageToPdfApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Image to PDF M3 Edition")
+        self.root.title("Image to PDF")
         self.root.geometry("620x760")
         self.root.resizable(False, False)
 
@@ -51,7 +53,7 @@ class ImageToPdfApp:
         # 變數初始化
         self.image_paths = []
         self.selected_index = None
-        self.list_btn_refs = []  # 【效能優化 1】：建立一個陣列來儲存清單按鈕的記憶體參考
+        self.list_btn_refs = []
 
         self.output_dir = os.getcwd()
         self.bg_color = (255, 255, 255)
@@ -79,6 +81,7 @@ class ImageToPdfApp:
                 print(f"特效載入失敗: {e}")
 
     def create_widgets(self):
+        # 略... (維持你原本極優秀的 UI 設計，完全不用動)
         title_lbl = ctk.CTkLabel(
             self.root, text="圖片轉換工具",
             font=ctk.CTkFont(family="Segoe UI Variable Display", size=26, weight="bold")
@@ -197,7 +200,6 @@ class ImageToPdfApp:
         self.btn_convert.pack(fill="x")
 
     def update_listbox(self):
-        """【效能優化】：當清單長度改變時，才全面重建元件"""
         for widget in self.list_frame.winfo_children():
             widget.destroy()
         self.list_btn_refs.clear()
@@ -224,10 +226,9 @@ class ImageToPdfApp:
                 command=lambda idx=i: self.select_item(idx)
             )
             btn_item.pack(fill="x", padx=4, pady=2)
-            self.list_btn_refs.append(btn_item)  # 將按鈕存起來供快速更新
+            self.list_btn_refs.append(btn_item)
 
     def select_item(self, index):
-        """【效能優化】：不重建列表，只針對性更新按鈕顏色，達至零延遲"""
         self.selected_index = index
         for i, btn in enumerate(self.list_btn_refs):
             is_selected = (i == self.selected_index)
@@ -334,7 +335,7 @@ class ImageToPdfApp:
             self.lbl_output_dir.configure(text=f"路徑: {self.output_dir}")
 
     def choose_color(self, event=None):
-        pick_color = AskColor(title="選擇透明背景替換色", initial_color=self.hex_color)
+        pick_color = CTkColorPicker.AskColor(title="選擇透明背景替換色", initial_color=self.hex_color)
         selected_hex = pick_color.get()
         if selected_hex:
             self.hex_color = selected_hex
@@ -351,14 +352,12 @@ class ImageToPdfApp:
 
         self.btn_convert.configure(state="disabled", text="轉換中...")
 
-        # 【效能優化 2】：讀取所有需要的變數，準備丟入背景執行緒
         is_merge = self.merge_mode.get()
         custom_name = self.custom_filename.get().strip()
         out_dir = self.output_dir
         bg_col = self.bg_color
-        paths = list(self.image_paths)  # 複製陣列，避免轉換中途被修改
+        paths = list(self.image_paths)
 
-        # 定義背景執行的任務 (遠離主執行緒)
         def conversion_task():
             success_count = 0
             final_msg = ""
@@ -391,14 +390,11 @@ class ImageToPdfApp:
                     all_success = False
                     final_msg = f"完成 {success_count}/{len(paths)} 張圖片轉換。"
 
-            # 轉換完成後，排程回主執行緒更新 UI (Tkinter 規定 UI 更新必須在主執行緒)
             self.root.after(0, lambda: self.on_conversion_done(is_merge, all_success, final_msg))
 
-        # 啟動多執行緒！
         threading.Thread(target=conversion_task, daemon=True).start()
 
     def on_conversion_done(self, is_merge, success, msg):
-        """【效能優化 2】：當背景轉檔結束後，呼叫此函式恢復 UI 狀態"""
         if is_merge:
             if success:
                 messagebox.showinfo("成功", f"轉換完成！\n\n{msg}")
@@ -413,7 +409,80 @@ class ImageToPdfApp:
         self.btn_convert.configure(state="normal", text="開始轉換")
 
 
+# ==========================================
+# 【新增】：快速模式 (Drop-and-Go) 邏輯
+# ==========================================
+def run_fast_mode(file_paths):
+    """
+    當使用者將檔案直接拖曳到 .exe 圖示上時觸發。
+    不開啟主 UI，直接將圖片打包成 PDF，並儲存在程式所在目錄。
+    """
+    # 建立一個隱藏的 Tkinter 視窗，用來顯示完成後的 MessageBox 提示
+    root = tk.Tk()
+    root.withdraw()
+
+    try:
+        # 1. 過濾出有效的圖片檔案
+        valid_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif')
+        images = [p for p in file_paths if p.lower().endswith(valid_exts)]
+
+        if not images:
+            messagebox.showerror("錯誤", "沒有找到支援的圖片格式！")
+            return
+
+        # 2. 決定輸出目錄 (取決於是否被 PyInstaller 打包)
+        if getattr(sys, 'frozen', False):
+            app_dir = os.path.dirname(sys.executable)
+        else:
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 3. 智慧判斷檔名：單檔用原名，多檔用時間
+        if len(images) == 1:
+            base_name = os.path.splitext(os.path.basename(images[0]))[0]
+            out_name = f"{base_name}.pdf"
+        else:
+            out_name = f"FastConvert_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+        out_path = os.path.join(app_dir, out_name)
+
+        # 4. 檢查檔案是否已存在，並詢問是否覆蓋
+        if os.path.exists(out_path):
+            overwrite = messagebox.askyesno(
+                "發現重複檔案",
+                f"輸出目錄中已存在名為「{out_name}」的檔案。\n\n是否要覆蓋它？"
+            )
+            # 如果使用者點擊「否」，則取消轉換並結束
+            if not overwrite:
+                return
+
+        # 5. 執行轉換 (預設背景色為白色)
+        success, msg = convert_images_to_pdf(images, out_path, (255, 255, 255))
+        if success:
+            messagebox.showinfo("快速轉換成功", f"已成功將 {len(images)} 張圖片轉換為 PDF！\n\n儲存於：\n{out_path}")
+        else:
+            messagebox.showerror("轉換失敗", msg)
+
+    except Exception as e:
+        messagebox.showerror("系統錯誤", str(e))
+    finally:
+        # 確保隱藏視窗的進程會被乾淨地關閉
+        root.destroy()
+
+
+# ==========================================
+# 程式進入點
+# ==========================================
 if __name__ == "__main__":
-    root = CTk_DnD()
-    app = ImageToPdfApp(root)
-    root.mainloop()
+    # sys.argv 存放的是系統傳給這支程式的參數
+    # sys.argv[0] 是程式自己本身的名字
+    # 如果 len(sys.argv) > 1，代表有人拖曳檔案到它的圖示上
+
+    if len(sys.argv) > 1:
+        # 提取拖曳進來的檔案路徑 (排除第 0 個自己)
+        dropped_files = sys.argv[1:]
+        run_fast_mode(dropped_files)
+    else:
+        # 沒有帶參數，正常啟動 UI
+        root = CTk_DnD()
+        app = ImageToPdfApp(root)
+        root.mainloop()
